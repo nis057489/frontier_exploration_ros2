@@ -98,6 +98,9 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
   this->declare_parameter<std::string>("local_costmap_qos_reliability", "inherit");
   this->declare_parameter<int>("local_costmap_qos_depth", -1);
   this->declare_parameter<double>("frontier_marker_scale", 0.15);
+  this->declare_parameter<double>("frontier_marker_color_r", 0.15);
+  this->declare_parameter<double>("frontier_marker_color_g", 0.9);
+  this->declare_parameter<double>("frontier_marker_color_b", 0.2);
   this->declare_parameter<bool>("autostart", true);
   this->declare_parameter<bool>("control_service_enabled", true);
   this->declare_parameter<bool>("frontier_map_optimization_enabled", true);
@@ -158,6 +161,9 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
   params_.selected_frontier_topic = this->get_parameter("selected_frontier_topic").as_string();
   params_.optimized_map_topic = this->get_parameter("optimized_map_topic").as_string();
   params_.frontier_marker_scale = this->get_parameter("frontier_marker_scale").as_double();
+  params_.frontier_marker_color_r = this->get_parameter("frontier_marker_color_r").as_double();
+  params_.frontier_marker_color_g = this->get_parameter("frontier_marker_color_g").as_double();
+  params_.frontier_marker_color_b = this->get_parameter("frontier_marker_color_b").as_double();
   autostart_ = this->get_parameter("autostart").as_bool();
   control_service_enabled_ = this->get_parameter("control_service_enabled").as_bool();
   if (!autostart_ && !control_service_enabled_) {
@@ -1218,9 +1224,9 @@ void FrontierExplorerNode::publishFrontierMarkers(const FrontierSequence & front
     marker.scale.x = params_.frontier_marker_scale;
     marker.scale.y = params_.frontier_marker_scale;
     marker.color.a = 1.0;
-    marker.color.r = 0.15;
-    marker.color.g = 0.9;
-    marker.color.b = 0.2;
+    marker.color.r = static_cast<float>(params_.frontier_marker_color_r);
+    marker.color.g = static_cast<float>(params_.frontier_marker_color_g);
+    marker.color.b = static_cast<float>(params_.frontier_marker_color_b);
     // Color/namespace choices stay stable for predictable RViz overlays and MRTSP parity.
 
     for (const auto & frontier : frontiers) {

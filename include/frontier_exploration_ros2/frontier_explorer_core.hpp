@@ -72,6 +72,9 @@ struct FrontierExplorerCoreParams
   std::string selected_frontier_topic{"explore/selected_frontier"};
   std::string optimized_map_topic{"explore/optimized_map"};
   double frontier_marker_scale{0.15};
+  double frontier_marker_color_r{0.15};
+  double frontier_marker_color_g{0.9};
+  double frontier_marker_color_b{0.2};
   bool frontier_map_optimization_enabled{true};
   double sigma_s{2.0};
   double sigma_r{30.0};
