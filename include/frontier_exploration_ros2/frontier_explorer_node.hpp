@@ -114,6 +114,7 @@ private:
   // Parsed QoS policy and startup autodetect configuration.
   TopicQosProfiles topic_qos_profiles_;
   bool autostart_{true};
+  double startup_delay_s_{0.0};
   bool control_service_enabled_{true};
   bool map_qos_autodetect_on_startup_{false};
   double map_qos_autodetect_timeout_s_{2.0};
@@ -152,6 +153,7 @@ private:
   rclcpp::TimerBase::SharedPtr control_timer_;
   rclcpp::TimerBase::SharedPtr stop_completion_timer_;
   rclcpp::TimerBase::SharedPtr deferred_shutdown_timer_;
+  rclcpp::TimerBase::SharedPtr startup_delay_timer_;
   std::optional<ScheduledControlRequest> scheduled_control_request_;
   bool pending_quit_after_stop_{false};
   bool quit_requested_{false};

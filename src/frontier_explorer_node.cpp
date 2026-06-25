@@ -102,6 +102,7 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
   this->declare_parameter<double>("frontier_marker_color_g", 0.9);
   this->declare_parameter<double>("frontier_marker_color_b", 0.2);
   this->declare_parameter<bool>("autostart", true);
+  this->declare_parameter<double>("startup_delay_s", 0.0);
   this->declare_parameter<bool>("control_service_enabled", true);
   this->declare_parameter<bool>("frontier_map_optimization_enabled", true);
   this->declare_parameter<double>("sigma_s", 2.0);
@@ -165,6 +166,7 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
   params_.frontier_marker_color_g = this->get_parameter("frontier_marker_color_g").as_double();
   params_.frontier_marker_color_b = this->get_parameter("frontier_marker_color_b").as_double();
   autostart_ = this->get_parameter("autostart").as_bool();
+  startup_delay_s_ = this->get_parameter("startup_delay_s").as_double();
   control_service_enabled_ = this->get_parameter("control_service_enabled").as_bool();
   if (!autostart_ && !control_service_enabled_) {
     control_service_enabled_ = true;
@@ -351,6 +353,18 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
   runtime_state_ = RuntimeState::COLD_IDLE;
   if (!autostart_) {
     core_->stop_exploration_session("Frontier exploration initialized in cold idle mode");
+  } else if (startup_delay_s_ > 0.0) {
+    RCLCPP_INFO(
+      this->get_logger(),
+      "Autostart deferred by %.2f s (startup_delay_s)", startup_delay_s_);
+    startup_delay_timer_ = this->create_wall_timer(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::duration<double>(startup_delay_s_)),
+      [this]() {
+        startup_delay_timer_->cancel();
+        startup_delay_timer_.reset();
+        startExplorationRuntime();
+      });
   } else {
     startExplorationRuntime();
   }
