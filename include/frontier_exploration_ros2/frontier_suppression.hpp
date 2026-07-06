@@ -52,6 +52,10 @@ struct FrontierSuppressionConfig
   int max_regions{64};
   // Quantization scale reused from frontier equivalence tolerance.
   double equivalence_tolerance{0.30};
+  // When true, a region promoted from attempt_threshold failures never expires (e.g. a
+  // waypoint behind glass that Nav2 will never successfully reach). When false, promoted
+  // regions keep the original timeout_s TTL behavior.
+  bool permanent_after_threshold{true};
 };
 
 // Quantized key used to collapse near-identical goal points into one attempt bucket.
@@ -85,6 +89,9 @@ struct SuppressedRegion
   std::pair<double, double> center;
   double side_length_m{0.0};
   int64_t last_updated_ns{0};
+  // Permanent regions are never removed by prune_expired -- the area is being given up on
+  // for good (e.g. a waypoint behind glass) rather than temporarily avoided.
+  bool permanent{false};
 };
 
 // Per-dispatch progress bookkeeping used by the no-progress watchdog.

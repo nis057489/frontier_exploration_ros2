@@ -21,9 +21,11 @@ limitations under the License.
 #include <mutex>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -58,6 +60,10 @@ private:
   void occupancyGridCallback(const nav_msgs::msg::OccupancyGrid::ConstSharedPtr msg);
   void costmapCallback(const nav_msgs::msg::OccupancyGrid::ConstSharedPtr msg);
   void localCostmapCallback(const nav_msgs::msg::OccupancyGrid::ConstSharedPtr msg);
+  void teamMapCallback(const nav_msgs::msg::OccupancyGrid::ConstSharedPtr msg);
+  void peerPoseCallback(std::size_t peer_index, const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg);
+  std::vector<std::pair<double, double>> getPeerPositions();
+  void publishOwnPoseForPeers();
   void publishCompletionEvent();
 
   std::optional<geometry_msgs::msg::Pose> getCurrentPose();
@@ -119,6 +125,13 @@ private:
   bool map_qos_autodetect_on_startup_{false};
   double map_qos_autodetect_timeout_s_{2.0};
 
+  // Team awareness: peer pose topics to subscribe to, and this robot's own pose topic
+  // published for teammates to relay/subscribe to in turn.
+  std::string team_map_topic_{"team_map_ddil"};
+  std::vector<std::string> peer_pose_topics_;
+  std::string own_pose_topic_{"explore/pose"};
+  double own_pose_publish_rate_hz_{2.0};
+
   enum class RuntimeState
   {
     COLD_IDLE,
@@ -142,11 +155,17 @@ private:
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr frontier_marker_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr selected_frontier_pub_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr optimized_map_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr own_pose_pub_;
 
   // Subscriptions and timers.
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_sub_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr local_costmap_sub_;
+  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr team_map_sub_;
+  std::vector<rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr> peer_pose_subs_;
+  std::mutex peer_poses_mutex_;
+  std::vector<std::optional<geometry_msgs::msg::Pose>> peer_poses_;
+  rclcpp::TimerBase::SharedPtr own_pose_publish_timer_;
   rclcpp::TimerBase::SharedPtr map_autodetect_timer_;
   rclcpp::TimerBase::SharedPtr map_processing_timer_;
   rclcpp::TimerBase::SharedPtr suppression_watchdog_timer_;
