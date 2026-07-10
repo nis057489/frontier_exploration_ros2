@@ -563,6 +563,12 @@ if (!active_goal_cost_status.has_value()) {
     "); canceling active goal and deferring frontier reselection until the next map refresh" :
     "active frontier visible reveal gain could not be evaluated; canceling active goal and deferring frontier reselection until the next map refresh";
 
+  // Without this, a marginal frontier whose dispatch pose keeps reading as "nothing new to
+  // see" gets canceled and immediately reselected as the best remaining candidate forever,
+  // since this path bypassed suppression bookkeeping entirely -- unlike a real dispatch
+  // failure/rejection, which does count here. Recording it lets repeated exhaustion on the
+  // same spot age out through the normal suppression threshold/timeout instead of looping.
+  record_failed_frontier_attempt(active_goal_frontier);
   request_active_goal_cancel(visible_gain_preemption_reason);
   return;
   }
@@ -714,7 +720,10 @@ void FrontierExplorerCore::issue_active_goal_cancel()
   pending_cancel_reason.reset();
   cancel_request_in_progress = true;
   set_goal_state(GoalLifecycleState::CANCELING);
-  callbacks.log_debug(reason);
+  // Was log_debug, which is suppressed at the default log level -- every active-goal
+  // cancellation (blocked goal, no-progress timeout, visible-gain exhaustion, etc.) was
+  // effectively invisible in normal run logs, with only the resulting resend visible.
+  callbacks.log_info(reason);
 
   const int dispatch_id = current_dispatch_id;
   // Bind cancel response to current dispatch to ignore late/stale acknowledgements.
