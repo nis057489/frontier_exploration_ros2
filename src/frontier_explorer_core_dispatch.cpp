@@ -484,6 +484,13 @@ if (!active_goal_cost_status.has_value()) {
     distance_completed_frontier = frontier_with_goal_point(
       *active_goal_frontier,
       *active_goal_point);
+    // Proximity alone doesn't mean the frontier's unexplored area was actually revealed (e.g.
+    // it's on the far side of a wall/corner from every reachable standoff point). Without
+    // recording this like the visible-gain-exhausted path below does, a frontier like that gets
+    // "completed" from a different nearby edge point every cycle forever, since this path
+    // bypasses suppression bookkeeping entirely -- record it so repeated non-productive
+    // completions on the same frontier age out through the normal suppression threshold/timeout.
+    record_failed_frontier_attempt(active_goal_frontier);
     request_active_goal_cancel(completion_distance_reason);
     return;
   }
