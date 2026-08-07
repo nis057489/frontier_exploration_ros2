@@ -915,6 +915,12 @@ bool FrontierExplorerCore::send_frontier_goal(
     callbacks.log_info(
       "Skipping blocked frontier goal before dispatch: " + *cost_status +
       "; " + describe_frontier(candidate_frontier));
+
+    // This path bypasses suppression bookkeeping entirely -- like the active-goal
+    // blocked/completed-by-proximity paths above, record it so a candidate that is blocked on
+    // every cycle before ever being dispatched ages out through the normal suppression
+    // threshold/timeout instead of being re-selected and re-skipped forever.
+    record_failed_frontier_attempt(std::optional<FrontierLike>{candidate_frontier});
   }
 
   if (dispatch_index >= frontier_sequence.size()) {
