@@ -463,7 +463,17 @@ std::optional<std::string> FrontierExplorerCore::frontier_cost_status(
   }
 
   const auto global_cost = world_point_cost(costmap, goal_point);
-  if (global_cost.has_value() && *global_cost >= params.occ_threshold) {
+  if (!global_cost.has_value()) {
+    // No cost data means this point falls outside the global costmap's current array
+    // bounds -- Nav2's planner cannot plan into cells that don't exist yet and will
+    // just spam "worldToMap failed" until the goal aborts. This happens when the global
+    // costmap's StaticLayer hasn't resized to match a just-grown map yet (it resizes on
+    // its own ~2Hz update cycle, lagging behind the live map topic frontier_explorer
+    // reads); treat it as blocked so the frontier is skipped/retried later instead of
+    // being dispatched straight into a guaranteed planning failure.
+    return std::string("Current frontier target falls outside the global costmap's current bounds");
+  }
+  if (*global_cost >= params.occ_threshold) {
     return std::string(
       "Current frontier target is blocked in global costmap (cost=") +
       std::to_string(*global_cost) + ")";
