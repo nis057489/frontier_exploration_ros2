@@ -288,7 +288,7 @@ private:
         global_frame_,
         robot_base_frame_,
         tf2::TimePointZero,
-        tf2::durationFromSec(0.2));
+        tf2::durationFromSec(10.0));
       geometry_msgs::msg::Pose pose;
       pose.position.x = transform.transform.translation.x;
       pose.position.y = transform.transform.translation.y;

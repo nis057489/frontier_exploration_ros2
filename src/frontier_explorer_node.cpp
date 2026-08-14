@@ -1310,7 +1310,7 @@ std::optional<geometry_msgs::msg::Pose> FrontierExplorerNode::getCurrentPose()
       params_.global_frame,
       params_.robot_base_frame,
       tf2::TimePointZero,
-      tf2::durationFromSec(0.5));
+      tf2::durationFromSec(10.0));
 
     geometry_msgs::msg::Pose pose;
     // Convert transform directly to pose used by frontier/core decisions.
