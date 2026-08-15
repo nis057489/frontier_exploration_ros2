@@ -148,20 +148,8 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
   this->declare_parameter<double>("frontier_suppression_startup_grace_period_s", 15.0);
   this->declare_parameter<int>("frontier_suppression_max_attempt_records", 256);
   this->declare_parameter<int>("frontier_suppression_max_regions", 64);
-  this->declare_parameter<bool>("frontier_suppression_permanent_after_threshold", true);
   this->declare_parameter<bool>("completion_event_enabled", false);
   this->declare_parameter<std::string>("completion_event_topic", "exploration_complete");
-
-  // Team awareness: avoid re-exploring cells the team map already resolved, and avoid
-  // picking waypoints too close to a teammate. Topic names are namespace-relative (default
-  // team_map_ddil / explore/pose), consistent with the other per-robot topics above.
-  this->declare_parameter<bool>("team_awareness_enabled", true);
-  this->declare_parameter<std::string>("team_map_topic", "team_map_ddil");
-  this->declare_parameter<double>("team_known_check_radius_m", 0.0);
-  this->declare_parameter<double>("peer_avoidance_radius_m", 1.0);
-  this->declare_parameter<std::vector<std::string>>("peer_pose_topics", std::vector<std::string>{});
-  this->declare_parameter<std::string>("own_pose_topic", "explore/pose");
-  this->declare_parameter<double>("own_pose_publish_rate_hz", 2.0);
 
   // Read navigation/exploration behavior parameters first; QoS parsing is handled separately.
   params_.map_topic = this->get_parameter("map_topic").as_string();
@@ -255,15 +243,6 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
     "frontier_suppression_max_attempt_records").as_int();
   params_.frontier_suppression_max_regions = this->get_parameter(
     "frontier_suppression_max_regions").as_int();
-  params_.frontier_suppression_permanent_after_threshold = this->get_parameter(
-    "frontier_suppression_permanent_after_threshold").as_bool();
-  params_.team_awareness_enabled = this->get_parameter("team_awareness_enabled").as_bool();
-  team_map_topic_ = this->get_parameter("team_map_topic").as_string();
-  params_.team_known_check_radius_m = this->get_parameter("team_known_check_radius_m").as_double();
-  params_.peer_avoidance_radius_m = this->get_parameter("peer_avoidance_radius_m").as_double();
-  peer_pose_topics_ = this->get_parameter("peer_pose_topics").as_string_array();
-  own_pose_topic_ = this->get_parameter("own_pose_topic").as_string();
-  own_pose_publish_rate_hz_ = this->get_parameter("own_pose_publish_rate_hz").as_double();
   completion_event_config_.enabled = this->get_parameter("completion_event_enabled").as_bool();
   completion_event_config_.topic = this->get_parameter("completion_event_topic").as_string();
   if (completion_event_config_.enabled && completion_event_config_.topic.empty()) {
@@ -314,9 +293,6 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
   optimized_map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
     params_.optimized_map_topic,
     10);
-  own_pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
-    own_pose_topic_,
-    10);
   if (control_service_enabled_) {
     control_service_ = this->create_service<srv::ControlExploration>(
       "control_exploration",
@@ -360,9 +336,6 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
     };
   callbacks.debug_outputs_enabled = [this]() {
       return this->debugOutputsEnabled();
-    };
-  callbacks.get_peer_positions = [this]() {
-      return this->getPeerPositions();
     };
   callbacks.log_debug = [this](const std::string & message) {
       RCLCPP_DEBUG(this->get_logger(), "%s", message.c_str());
@@ -621,44 +594,6 @@ void FrontierExplorerNode::startExplorationRuntime()
     params_.local_costmap_topic,
     topic_qos_profiles_.make_local_costmap_qos(),
     std::bind(&FrontierExplorerNode::localCostmapCallback, this, std::placeholders::_1));
-
-  if (params_.team_awareness_enabled && !team_map_topic_.empty()) {
-    auto team_map_qos = rclcpp::QoS(rclcpp::KeepLast(1));
-    team_map_qos.reliable();
-    team_map_qos.transient_local();
-    team_map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-      team_map_topic_,
-      team_map_qos,
-      std::bind(&FrontierExplorerNode::teamMapCallback, this, std::placeholders::_1));
-  }
-
-  if (params_.team_awareness_enabled && params_.peer_avoidance_radius_m > 0.0 &&
-    !peer_pose_topics_.empty())
-  {
-    std::lock_guard<std::mutex> lock(peer_poses_mutex_);
-    peer_poses_.assign(peer_pose_topics_.size(), std::nullopt);
-    peer_pose_subs_.clear();
-    peer_pose_subs_.reserve(peer_pose_topics_.size());
-    for (std::size_t i = 0; i < peer_pose_topics_.size(); ++i) {
-      peer_pose_subs_.push_back(
-        this->create_subscription<geometry_msgs::msg::PoseStamped>(
-          peer_pose_topics_[i],
-          10,
-          [this, i](const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg) {
-            this->peerPoseCallback(i, msg);
-          }));
-    }
-  }
-
-  if (own_pose_publish_rate_hz_ > 0.0 && !peer_pose_topics_.empty()) {
-    // Only bother publishing this robot's own pose when at least one peer is configured to
-    // consume it -- single-robot runs would otherwise publish to nobody.
-    own_pose_publish_timer_ = this->create_wall_timer(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::duration<double>(1.0 / own_pose_publish_rate_hz_)),
-      std::bind(&FrontierExplorerNode::publishOwnPoseForPeers, this));
-  }
-
   if (params_.map_processing_rate_hz > 0.0) {
     if (effective_map_processing_rate_hz_.has_value()) {
       ensureMapProcessingTimer();
@@ -710,13 +645,6 @@ void FrontierExplorerNode::enterColdIdle()
   map_sub_.reset();
   costmap_sub_.reset();
   local_costmap_sub_.reset();
-  team_map_sub_.reset();
-  peer_pose_subs_.clear();
-  {
-    std::lock_guard<std::mutex> lock(peer_poses_mutex_);
-    peer_poses_.clear();
-  }
-  own_pose_publish_timer_.reset();
   map_autodetect_timer_.reset();
   map_processing_timer_.reset();
   suppression_watchdog_timer_.reset();
@@ -1234,53 +1162,6 @@ void FrontierExplorerNode::localCostmapCallback(const nav_msgs::msg::OccupancyGr
     return;
   }
   core_->localCostmapCallback(OccupancyGrid2d(msg));
-}
-
-void FrontierExplorerNode::teamMapCallback(const nav_msgs::msg::OccupancyGrid::ConstSharedPtr msg)
-{
-  if (runtime_state_ != RuntimeState::RUNNING) {
-    return;
-  }
-  core_->teamMapCallback(OccupancyGrid2d(msg));
-}
-
-void FrontierExplorerNode::peerPoseCallback(
-  std::size_t peer_index,
-  const geometry_msgs::msg::PoseStamped::ConstSharedPtr msg)
-{
-  std::lock_guard<std::mutex> lock(peer_poses_mutex_);
-  if (peer_index < peer_poses_.size()) {
-    peer_poses_[peer_index] = msg->pose;
-  }
-}
-
-std::vector<std::pair<double, double>> FrontierExplorerNode::getPeerPositions()
-{
-  std::vector<std::pair<double, double>> positions;
-  std::lock_guard<std::mutex> lock(peer_poses_mutex_);
-  positions.reserve(peer_poses_.size());
-  for (const auto & pose : peer_poses_) {
-    if (pose.has_value()) {
-      positions.emplace_back(pose->position.x, pose->position.y);
-    }
-  }
-  return positions;
-}
-
-void FrontierExplorerNode::publishOwnPoseForPeers()
-{
-  if (!own_pose_pub_) {
-    return;
-  }
-  const auto pose = getCurrentPose();
-  if (!pose.has_value()) {
-    return;
-  }
-  geometry_msgs::msg::PoseStamped pose_msg;
-  pose_msg.header.stamp = this->get_clock()->now();
-  pose_msg.header.frame_id = params_.global_frame;
-  pose_msg.pose = *pose;
-  own_pose_pub_->publish(pose_msg);
 }
 
 void FrontierExplorerNode::publishCompletionEvent()

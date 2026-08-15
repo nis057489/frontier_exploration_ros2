@@ -35,7 +35,6 @@ add_library(${PROJECT_NAME}_core
   src/frontier_explorer_core_maps.cpp
   src/frontier_explorer_core_frontiers.cpp
   src/frontier_explorer_core_suppression.cpp
-  src/frontier_explorer_core_team_awareness.cpp
   src/frontier_explorer_core_dispatch.cpp
   src/mrtsp_ordering.cpp
   src/mrtsp_solver.cpp

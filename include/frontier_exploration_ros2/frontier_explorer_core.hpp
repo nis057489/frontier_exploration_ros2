@@ -126,19 +126,6 @@ struct FrontierExplorerCoreParams
   double frontier_suppression_startup_grace_period_s{15.0};
   int frontier_suppression_max_attempt_records{256};
   int frontier_suppression_max_regions{64};
-  // Once a frontier area has failed attempt_threshold times, give up on it permanently
-  // instead of letting the suppression region expire after timeout_s.
-  bool frontier_suppression_permanent_after_threshold{true};
-
-  // Team awareness: avoid picking frontiers the team already knows about (via a raw,
-  // pre-local-merge team map) or that are close to a teammate's current position.
-  bool team_awareness_enabled{true};
-  // Radius in meters around a candidate frontier's goal point used to check whether the
-  // team map already has non-unknown data there.
-  double team_known_check_radius_m{0.0};
-  // Candidates whose goal point is within this radius of any peer's last known position
-  // are skipped. 0 disables peer-proximity filtering.
-  double peer_avoidance_radius_m{1.0};
 };
 
 // Host callbacks injected by the node wrapper (time, TF pose, action transport, logging).
@@ -154,9 +141,6 @@ struct FrontierExplorerCoreCallbacks
   // Completion hook lets the ROS-facing node trigger optional post-completion side effects.
   std::function<void()> on_exploration_complete;
   std::function<bool()> debug_outputs_enabled;
-  // Latest known (x, y) positions of teammate robots, in global_frame. Empty when no peer
-  // data is available (single-robot runs, or no peer has reported a position yet).
-  std::function<std::vector<std::pair<double, double>>()> get_peer_positions;
   std::function<void(const std::string &)> log_debug;
   std::function<void(const std::string &)> log_info;
   std::function<void(const std::string &)> log_warn;
@@ -181,7 +165,6 @@ public:
   void occupancyGridCallback(const OccupancyGrid2d & map_msg);
   void costmapCallback(const OccupancyGrid2d & map_msg);
   void localCostmapCallback(const OccupancyGrid2d & map_msg);
-  void teamMapCallback(const OccupancyGrid2d & map_msg);
   void ingestRawMapUpdate(const OccupancyGrid2d & map_msg);
   void handleUrgentRawMapUpdateForActiveGoal();
   void processPendingMapUpdate();
@@ -373,10 +356,6 @@ public:
   DecisionMapWorkspace decision_map_workspace;
   std::optional<OccupancyGrid2d> costmap;
   std::optional<OccupancyGrid2d> local_costmap;
-  // Raw, pre-local-merge team-fused map (e.g. team_map_ddil), used only to check whether the
-  // team already knows about a cell -- independent from `map`, which is this robot's own
-  // already-merged nav_map and cannot distinguish "I saw this" from "the team told me".
-  std::optional<OccupancyGrid2d> team_map;
   int map_generation{0};
   int decision_map_generation{0};
   int costmap_generation{0};
@@ -501,9 +480,6 @@ private:
   bool suppression_runtime_active(int64_t now_ns) const;
   bool should_return_to_start_when_all_frontiers_suppressed() const;
   FrontierSequence filter_frontiers_for_suppression(const FrontierSequence & frontiers);
-  FrontierSequence filter_frontiers_for_team_awareness(const FrontierSequence & frontiers) const;
-  bool goal_point_known_to_team(const std::pair<double, double> & goal_point) const;
-  bool goal_point_near_any_peer(const std::pair<double, double> & goal_point) const;
   double frontier_snapshot_min_goal_distance_for_pose(
     const geometry_msgs::msg::Pose & current_pose);
   void record_failed_frontier_attempt(const std::optional<FrontierLike> & frontier);

@@ -56,7 +56,6 @@ FrontierSuppression * FrontierExplorerCore::ensure_frontier_suppression()
       params.frontier_suppression_max_attempt_records,
       params.frontier_suppression_max_regions,
       params.frontier_visit_tolerance,
-      params.frontier_suppression_permanent_after_threshold,
     });
   }
   return frontier_suppression_.get();
@@ -207,8 +206,7 @@ void FrontierExplorerCore::consider_cancel_suppressed_return_to_start()
     return;
   }
 
-  FrontierSequence filtered_frontiers = filter_frontiers_for_suppression(
-    filter_frontiers_for_team_awareness(snapshot.frontiers));
+  FrontierSequence filtered_frontiers = filter_frontiers_for_suppression(snapshot.frontiers);
   if (filtered_frontiers.empty()) {
     publish_frontier_markers(filtered_frontiers);
     return;

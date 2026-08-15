@@ -55,8 +55,6 @@ FrontierExplorerCore::FrontierExplorerCore(
     1,
     params.frontier_suppression_max_attempt_records);
   params.frontier_suppression_max_regions = std::max(1, params.frontier_suppression_max_regions);
-  params.team_known_check_radius_m = std::max(0.0, params.team_known_check_radius_m);
-  params.peer_avoidance_radius_m = std::max(0.0, params.peer_avoidance_radius_m);
   params.sigma_s = std::max(params.sigma_s, 1e-6);
   params.sigma_r = std::max(params.sigma_r, 1e-6);
   params.dilation_kernel_radius_cells = std::max(0, params.dilation_kernel_radius_cells);

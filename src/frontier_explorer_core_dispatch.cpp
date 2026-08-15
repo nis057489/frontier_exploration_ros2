@@ -83,8 +83,7 @@ void FrontierExplorerCore::try_send_next_goal()
   }
 
   const FrontierSequence & frontiers = snapshot.frontiers;
-  FrontierSequence filtered_frontiers = filter_frontiers_for_suppression(
-    filter_frontiers_for_team_awareness(frontiers));
+  FrontierSequence filtered_frontiers = filter_frontiers_for_suppression(frontiers);
   bool escape_mode_active = false;
   if (filtered_frontiers.empty() && !frontiers.empty()) {
     no_frontiers_reported = false;
@@ -107,8 +106,7 @@ void FrontierExplorerCore::try_send_next_goal()
       return;
     }
 
-    FrontierSequence escape_filtered_frontiers = filter_frontiers_for_suppression(
-      filter_frontiers_for_team_awareness(escape_snapshot.frontiers));
+    FrontierSequence escape_filtered_frontiers = filter_frontiers_for_suppression(escape_snapshot.frontiers);
     if (escape_filtered_frontiers.empty() && !escape_snapshot.frontiers.empty()) {
       no_frontiers_reported = false;
       no_reachable_frontier_reported = false;
@@ -579,8 +577,7 @@ if (!active_goal_cost_status.has_value()) {
   }
 
   const FrontierSequence & frontiers = snapshot.frontiers;
-  FrontierSequence filtered_frontiers = filter_frontiers_for_suppression(
-    filter_frontiers_for_team_awareness(frontiers));
+  FrontierSequence filtered_frontiers = filter_frontiers_for_suppression(frontiers);
   if (filtered_frontiers.empty() && !frontiers.empty()) {
     reset_replacement_candidate_tracking();
     publish_frontier_markers(filtered_frontiers);

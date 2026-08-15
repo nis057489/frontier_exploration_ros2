@@ -166,7 +166,7 @@ void FrontierSuppression::prune_expired(int64_t now_ns)
   }
 
   for (auto it = state_.regions.begin(); it != state_.regions.end();) {
-    if (!it->permanent && now_ns - it->last_updated_ns >= ttl_ns) {
+    if (now_ns - it->last_updated_ns >= ttl_ns) {
       it = state_.regions.erase(it);
     } else {
       ++it;
@@ -237,25 +237,11 @@ void FrontierSuppression::evict_oldest_region(
 
   // Regions are also bounded so prolonged operation cannot accumulate infinite memory.
   // If this path is ever hot, the warning log should make it visible to operators so they can
-  // revisit TTL or cap sizing. Prefer evicting a temporary region over a permanent one so a
-  // permanently given-up-on area (e.g. behind glass) survives capacity pressure from ordinary
-  // transient suppression churn; only fall back to evicting a permanent region if every region
-  // is permanent.
-  auto oldest_it = state_.regions.end();
+  // revisit TTL or cap sizing.
+  auto oldest_it = state_.regions.begin();
   for (auto it = state_.regions.begin(); it != state_.regions.end(); ++it) {
-    if (it->permanent) {
-      continue;
-    }
-    if (oldest_it == state_.regions.end() || it->last_updated_ns < oldest_it->last_updated_ns) {
+    if (it->last_updated_ns < oldest_it->last_updated_ns) {
       oldest_it = it;
-    }
-  }
-  if (oldest_it == state_.regions.end()) {
-    oldest_it = state_.regions.begin();
-    for (auto it = state_.regions.begin(); it != state_.regions.end(); ++it) {
-      if (it->last_updated_ns < oldest_it->last_updated_ns) {
-        oldest_it = it;
-      }
     }
   }
   if (log_warn) {
@@ -294,7 +280,6 @@ void FrontierSuppression::promote_attempt_to_region(
     };
     chosen_it->side_length_m *= 2.0;
     chosen_it->last_updated_ns = now_ns;
-    chosen_it->permanent = chosen_it->permanent || config_.permanent_after_threshold;
     remove_attempts_inside_region(*chosen_it);
     return;
   }
@@ -305,7 +290,6 @@ void FrontierSuppression::promote_attempt_to_region(
       // We intentionally do not expand here; the point is already inside the current square and
       // therefore does not provide new geometric information.
       region.last_updated_ns = now_ns;
-      region.permanent = region.permanent || config_.permanent_after_threshold;
       remove_attempts_inside_region(region);
       return;
     }
@@ -321,7 +305,6 @@ void FrontierSuppression::promote_attempt_to_region(
     goal_point,
     config_.base_size_m,
     now_ns,
-    config_.permanent_after_threshold,
   });
   remove_attempts_inside_region(state_.regions.back());
 }
